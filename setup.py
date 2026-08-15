@@ -21,7 +21,7 @@ setup(
     install_requires = [
             'grequests',
             'loguru',
-            'bs4',
+            'beautifulsoup4',
             'jinja2',
             'requests',
             'ebooklib',
