@@ -11,7 +11,7 @@ import re
 
 
 class chapter():
-    def __init__(self,title, id, json = None, level = 0, work_id = None, toc_key = None) -> None:
+    def __init__(self,title, id, json = None, level = 0, work_id = None, toc_key = None, download = True) -> None:
         self.title = title
         self.id = id
         self.level = level
@@ -20,12 +20,17 @@ class chapter():
         self.downloader = Downloader(self.episodes)
         self.work_id = work_id
         self.toc_key = toc_key
+        self._downloaded = False
         
-        if json:
+        if json and download:
             self.json = json
             self.match_episode(self.json)
+        elif json:
+            self.json = json
+            self._build_episodes(json)
 
-    def match_episode(self, json):
+    def _build_episodes(self, json):
+        """Build episode objects without downloading."""
         key = self.toc_key or f"TableOfContentsChapter:{self.id}"
         episode_data = json[key].get('episodeUnions', [])
             
@@ -34,16 +39,41 @@ class chapter():
             episode_data = json[f"Episode:{episode_id}"]
             episode_title = episode_data['title']
             self.episodes.append(Episodes(self.work_id, episode_id, episode_title))
+
+    def match_episode(self, json):
+        if self._downloaded:
+            return
+        
+        # Ensure episodes are built
+        if not self.episodes:
+            self._build_episodes(json)
         
         logger.info(f"Downloading: {self.title}")   
         self.downloader.download()
+        self._downloaded = True
         
+
+    def download(self):
+        """Download episodes for this chapter."""
+        if hasattr(self, 'json') and self.json:
+            self.match_episode(self.json)
+        elif self.episodes:
+            logger.info(f"Downloading: {self.title}")   
+            self.downloader.download()
+            self._downloaded = True
 
     def add_child(self, child):
         self.children.append(child)
     
     def get_episodes(self):
         return self.episodes
+    
+    def collect_episodes(self):
+        """Collect all episodes recursively without downloading."""
+        eps = list(self.episodes)
+        for child in self.children:
+            eps.extend(child.collect_episodes())
+        return eps
     
     def get_child_info(self):
         res = []
@@ -57,7 +87,7 @@ class chapter():
     def __str__(self) -> str:
         return f"{self.title} + {self.get_child_info()}"
     
-def parse_meta_json(_json: json) -> dict:
+def parse_meta_json(_json: json, download: bool = True) -> dict:
     res = {}
     # allocate the data attribute of the json file
     # see bench.json to see more details on this json file
@@ -87,7 +117,7 @@ def parse_meta_json(_json: json) -> dict:
     # if there is no chapter tree structure, hint the flat structure, which is no chapter segmentation
     if chap_list == ['TableOfContentsChapter:']: 
         logger.debug('flat structure')
-        root = chapter(res['title'], work_id, data, 0, work_id, chap_list[0])
+        root = chapter(res['title'], work_id, data, 0, work_id, chap_list[0], download=download)
         return res, root
     else:
         root = chapter(res['title'],res['title'])
@@ -96,7 +126,7 @@ def parse_meta_json(_json: json) -> dict:
         # rare case for first chapter is flat, following chapters are tree structure, e.g. https://kakuyomu.jp/works/16817139554696751535
         if chap_list[0] == 'TableOfContentsChapter:':
             logger.debug('first chapter is flat, following chapters are tree structure')
-            root = chapter(res['title'], work_id, data, 0, work_id, chap_list[0])
+            root = chapter(res['title'], work_id, data, 0, work_id, chap_list[0], download=download)
             stack = [root]
             chap_list = chap_list[1:]
         
@@ -108,7 +138,7 @@ def parse_meta_json(_json: json) -> dict:
             chap_j = data.get(chapter_ref, toc_j)
             level, title =  chap_j['level'], chap_j['title']
             _id = chap_j['id']
-            new = chapter(title, _id, data, level, work_id, chap_id)
+            new = chapter(title, _id, data, level, work_id, chap_id, download=download)
             if stack[-1].level < level:  
                 stack[-1].add_child(new)
                 stack.append(new)
@@ -141,14 +171,14 @@ def _get_table_of_contents(word_data: dict) -> list[str]:
 
 
 class Works():
-    def __init__(self, work_id) -> None:
+    def __init__(self, work_id, download: bool = True) -> None:
         self.work_id = work_id
         self._work_url = f'https://kakuyomu.jp/works/{self.work_id}'
 
         self.session = Session()
         
         self.json_raw : str = self.get_raw_json()
-        parse_result = parse_meta_json(json.loads(self.json_raw))
+        parse_result = parse_meta_json(json.loads(self.json_raw), download=download)
         self.res : dict = parse_result[0]
         self.content : chapter = parse_result[1]
         # self.author = res['']
@@ -157,6 +187,26 @@ class Works():
         self.introduction = self.res['introduction']
         self.tagLabels = self.res['tagLabels']
         self.author = self.res['author']
+
+    def list_episodes(self) -> list[tuple[str, str]]:
+        """Return list of (episode_id, title) without downloading."""
+        eps = self.content.collect_episodes()
+        return [(ep.episode_id, ep.title) for ep in eps]
+
+    def download_specific_episodes(self, episode_ids: list[str]) -> list[Episodes]:
+        """Download only the specified episode IDs."""
+        all_eps = self.content.collect_episodes()
+        id_set = set(episode_ids)
+        selected = [ep for ep in all_eps if ep.episode_id in id_set]
+        
+        if not selected:
+            logger.warning("No matching episodes found for the given IDs")
+            return []
+        
+        downloader = Downloader(selected)
+        logger.info(f"Downloading {len(selected)} selected episode(s)")
+        downloader.download()
+        return selected
 
         
     def get_raw_json(self) -> str:
