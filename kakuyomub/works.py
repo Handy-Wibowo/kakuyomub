@@ -208,6 +208,50 @@ class Works():
         downloader.download()
         return selected
 
+    def download_episode_range(self, start: int, end: int) -> list[Episodes]:
+        """Download episodes by their 1-based index range (inclusive)."""
+        all_eps = self.content.collect_episodes()
+        total = len(all_eps)
+        
+        if start < 1:
+            start = 1
+        if end > total:
+            end = total
+        if start > end:
+            logger.warning("Invalid range: start > end")
+            return []
+        
+        selected = all_eps[start - 1:end]
+        if not selected:
+            logger.warning("No episodes in the given range")
+            return []
+        
+        downloader = Downloader(selected)
+        logger.info(f"Downloading episodes {start} to {end} ({len(selected)} episode(s))")
+        downloader.download()
+        return selected
+
+    def download_recent_episodes(self, count: int) -> list[Episodes]:
+        """Download the most recent N episodes."""
+        all_eps = self.content.collect_episodes()
+        total = len(all_eps)
+        
+        if count < 1:
+            logger.warning("Recent episode count must be at least 1")
+            return []
+        if count > total:
+            count = total
+        
+        selected = all_eps[-count:]
+        if not selected:
+            logger.warning("No episodes found")
+            return []
+        
+        downloader = Downloader(selected)
+        logger.info(f"Downloading {len(selected)} most recent episode(s)")
+        downloader.download()
+        return selected
+
         
     def get_raw_json(self) -> str:
         

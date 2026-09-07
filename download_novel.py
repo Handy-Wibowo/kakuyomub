@@ -18,27 +18,51 @@ if not match:
 
 work_id = match.group(1) if match.lastindex else match.group(0)
 
-action = input("Download [a]ll episodes or [s]pecific episodes? [a]: ").strip().lower()
+print("\nOptions:")
+print("  [a] Download all episodes")
+print("  [s] Download specific episodes by ID")
+print("  [r] Download a range of episodes by index")
+print("  [n] Download the most recent N episodes")
+action = input("Choose an option [a]: ").strip().lower() or 'a'
+
+episodes = None
+episode_range = None
+recent = None
 
 if action == 's':
     print("\nFetching episode list...")
     w = Works(work_id, download=False)
-    episodes = w.list_episodes()
+    episodes_list = w.list_episodes()
     print(f"\nEpisodes for: {w.title}\n")
-    for idx, (ep_id, title) in enumerate(episodes, 1):
+    for idx, (ep_id, title) in enumerate(episodes_list, 1):
         print(f"[{idx:03d}] {ep_id} - {title}")
     
     selected = input("\nEnter episode IDs to download (comma-separated): ")
-    episode_ids = [eid.strip() for eid in selected.split(',') if eid.strip()]
+    episodes = [eid.strip() for eid in selected.split(',') if eid.strip()]
     
-    if not episode_ids:
+    if not episodes:
         print("No episode IDs provided. Exiting.")
         exit(1)
-    
-    print(f"\nDownloading {len(episode_ids)} selected episode(s)...")
-    download(work_id, "./", episodes=episode_ids)
-else:
-    print(f"Downloading work {work_id}...")
-    download(work_id)
 
-print("Done! The EPUB has been saved in the current folder.")
+elif action == 'r':
+    rng = input("Enter episode range (e.g., 1-10): ").strip()
+    rng_match = re.fullmatch(r'(\d+)\s*-\s*(\d+)', rng)
+    if not rng_match:
+        print("Invalid range format. Expected: START-END")
+        exit(1)
+    episode_range = (int(rng_match.group(1)), int(rng_match.group(2)))
+
+elif action == 'n':
+    try:
+        recent = int(input("How many recent episodes to download? ").strip())
+    except ValueError:
+        print("Invalid number. Exiting.")
+        exit(1)
+
+output_format = input("\nOutput format [epub/txt/html] (default: epub): ").strip().lower()
+if output_format not in ["epub", "txt", "html"]:
+    output_format = "epub"
+
+print(f"\nDownloading work {work_id}...")
+download(work_id, "./", episodes=episodes, episode_range=episode_range, recent=recent, output_format=output_format)
+print("Done!")

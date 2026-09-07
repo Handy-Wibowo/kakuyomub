@@ -5,6 +5,8 @@
 
 Convert Kakuyomu articles to Epub file | カクヨムの文章をEPUBに転写する | カクヨム文章转换为Epub
 
+This fork adds selective episode downloading and multiple output formats on top of the original [XHLin-gamer/kakuyomub](https://github.com/XHLin-gamer/kakuyomub).
+
 ## Usage
 
 Make sure python is available, then
@@ -27,9 +29,9 @@ pip install kakuyomub
 
 replace the `WORK_ID` with the カクヨム work id.
 
-## Download specific episodes only
+## Selective Episode Downloads
 
-You can download only selected episodes by their episode IDs.
+You can download only selected chapters instead of the entire novel.
 
 ### List all episodes first
 
@@ -44,17 +46,45 @@ Output example:
 ...
 ```
 
-### Download selected episodes
+### Download specific episodes by ID
 
 ```bash
 python -m kakuyomub.main WORK_ID --episodes 16817330668128757674,16817330668128757675
 ```
 
-You can also combine with `--path`:
+### Download a range of episodes by index
+
+Download episodes 1 through 10:
 
 ```bash
-python -m kakuyomub.main WORK_ID --episodes ID1,ID2,ID3 --path ./output
+python -m kakuyomub.main WORK_ID --range 1-10
 ```
+
+### Download the most recent N episodes
+
+Download the latest 5 episodes:
+
+```bash
+python -m kakuyomub.main WORK_ID --recent 5
+```
+
+## Output Formats
+
+By default, the tool creates a single `.epub` file. You can also output as separate `.txt` or `.html` files (one file per episode).
+
+```bash
+python -m kakuyomub.main WORK_ID --format epub   # default
+python -m kakuyomub.main WORK_ID --format txt
+python -m kakuyomub.main WORK_ID --format html
+```
+
+You can combine format with any selection option:
+
+```bash
+python -m kakuyomub.main WORK_ID --recent 10 --format txt --path ./output
+```
+
+This will create a folder like `./output/<title>_TXT/` containing the 10 most recent episodes as `.txt` files.
 
 ## Interactive CLI
 
@@ -69,7 +99,12 @@ python download_novel
 
 and then paste the **url** of the novel you want to download. (yes, you can paste the link of page like https://kakuyomu.jp/works/16817139554696751535 to the shell directly.)
 
-The interactive mode now also supports choosing between downloading **all episodes** or **specific episodes**.
+The interactive mode supports:
+- Downloading all episodes
+- Downloading specific episodes by ID
+- Downloading a range of episodes by index
+- Downloading the most recent N episodes
+- Choosing the output format (epub / txt / html)
 
 ## EXAMPLE
 
@@ -84,3 +119,17 @@ python -m kakuyomub.main 16817330668128729529
 
 and the result is as:
 ![alt text](image.png)
+
+## Changes from the original fork
+
+- **Selective episode downloads**
+  - `--episodes ID1,ID2,...` to download specific episodes
+  - `--range START-END` to download a range by index
+  - `--recent N` to download the N most recent episodes
+  - `--list-episodes` to list all episode IDs without downloading
+- **Multiple output formats**
+  - `--format epub` (default)
+  - `--format txt` exports one `.txt` file per episode
+  - `--format html` exports one `.html` file per episode
+- **Interactive script** `download_novel.py` updated to support all new options
+- Internal refactor of `Works`/`chapter` to allow metadata fetching without auto-downloading all episodes
